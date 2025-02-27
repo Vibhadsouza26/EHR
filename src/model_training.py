@@ -21,6 +21,7 @@ def load_and_preprocess_data(filepath: str):
     5. Convert all non-numeric columns into dummy variables.
     6. Impute any missing numeric values with the column mean.
     """
+    # Load dataset
     df = pd.read_csv(filepath)
     print("Original Columns:", df.columns)
     
@@ -29,12 +30,13 @@ def load_and_preprocess_data(filepath: str):
         df.drop('id', axis=1, inplace=True)
     
     # --- Feature Engineering ---
-    # Create ratio features
-    df['chol_age_ratio'] = df['chol'] / df['age']
-    df['trestbps_age_ratio'] = df['trestbps'] / df['age']
-    # Log-transform features (adding 1 to avoid log(0))
-    df['log_chol'] = np.log(df['chol'] + 1)
-    df['log_oldpeak'] = np.log(df['oldpeak'] + 1)
+    # Create ratio features with protection against division by zero
+    df['chol_age_ratio'] = df['chol'] / np.maximum(df['age'], 1)
+    df['trestbps_age_ratio'] = df['trestbps'] / np.maximum(df['age'], 1)
+    
+    # Log-transform features (avoiding log(0) or negative values)
+    df['log_chol'] = np.log(np.maximum(df['chol'], 1))
+    df['log_oldpeak'] = np.log(np.maximum(df['oldpeak'], 1))
     
     # Convert target: 0 if no heart disease, 1 otherwise
     df['num'] = df['num'].apply(lambda x: 0 if x == 0 else 1)
@@ -43,14 +45,21 @@ def load_and_preprocess_data(filepath: str):
     df = pd.get_dummies(df, drop_first=True)
     print("Columns after get_dummies:", df.columns)
     
-    # Impute missing values (if any) in numeric columns
-    if df.isnull().sum().sum() > 0:
-        numeric_cols = df.select_dtypes(include=[np.number]).columns
-        df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].mean())
+    # Replace infinite values with NaN
+    df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    
+    # Impute NaN values with the column mean
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].mean())
     
     # Separate features and target
     X = df.drop('num', axis=1)
     y = df['num']
+
+    # Check for NaN or infinite values
+    print("Is Infinite in X:", np.isinf(X).sum().sum())
+    print("Is NaN in X:", np.isnan(X).sum().sum())
+    
     return X, y
 
 def build_pipeline():
